@@ -1,7 +1,7 @@
 package com.baeldung.flink.connector;
 
-import com.baeldung.flink.model.InputMessage;
-import com.baeldung.flink.schema.InputMessageDeserializationSchema;
+import com.baeldung.flink.model.EventOut;
+import com.baeldung.flink.schema.EventOutDeserializationSchema;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
 
@@ -18,11 +18,11 @@ public class Consumers {
         return consumer;
     }
 
-    public static FlinkKafkaConsumer011<InputMessage> createInputMessageConsumer(String topic, String kafkaAddress, String kafkaGroup) {
+    public static FlinkKafkaConsumer011<EventOut> createEventOutConsumer(String topic, String kafkaAddress, String kafkaGroup) {
         Properties properties = new Properties();
         properties.setProperty("bootstrap.servers", kafkaAddress);
         properties.setProperty("group.id", kafkaGroup);
-        FlinkKafkaConsumer011<InputMessage> consumer = new FlinkKafkaConsumer011<InputMessage>(topic, new InputMessageDeserializationSchema(), properties);
+        FlinkKafkaConsumer011<EventOut> consumer = new FlinkKafkaConsumer011<EventOut>(topic, new EventOutDeserializationSchema(), properties);
 
         return consumer;
     }

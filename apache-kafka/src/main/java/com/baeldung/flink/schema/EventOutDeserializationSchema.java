@@ -1,5 +1,6 @@
 package com.baeldung.flink.schema;
 
+import com.baeldung.flink.model.EventOut;
 import com.baeldung.flink.model.InputMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -8,23 +9,23 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 
 import java.io.IOException;
 
-public class InputMessageDeserializationSchema implements DeserializationSchema<InputMessage> {
+public class EventOutDeserializationSchema implements DeserializationSchema<EventOut> {
 
     static ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
     @Override
-    public InputMessage deserialize(byte[] bytes) throws IOException {
+    public EventOut deserialize(byte[] bytes) throws IOException {
 
-        return objectMapper.readValue(bytes, InputMessage.class);
+        return objectMapper.readValue(bytes, EventOut.class);
     }
 
     @Override
-    public boolean isEndOfStream(InputMessage inputMessage) {
+    public boolean isEndOfStream(EventOut inputMessage) {
         return false;
     }
 
     @Override
-    public TypeInformation<InputMessage> getProducedType() {
-        return TypeInformation.of(InputMessage.class);
+    public TypeInformation<EventOut> getProducedType() {
+        return TypeInformation.of(EventOut.class);
     }
 }

@@ -1,11 +1,11 @@
 package com.baeldung.flink;
 
 import com.baeldung.flink.model.Backup;
+import com.baeldung.flink.model.EventOut;
 import com.baeldung.flink.model.InputMessage;
-import com.baeldung.flink.operator.BackupAggregator;
-import com.baeldung.flink.operator.InputMessageTimestampAssigner;
+import com.baeldung.flink.operator.BackupMap;
 import com.baeldung.flink.schema.BackupSerializationSchema;
-import com.baeldung.flink.schema.InputMessageDeserializationSchema;
+import com.baeldung.flink.schema.EventOutDeserializationSchema;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.commons.collections.ListUtils;
@@ -24,10 +24,13 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class BackupCreatorIntegrationTest {
     public static ObjectMapper mapper;
@@ -39,10 +42,10 @@ public class BackupCreatorIntegrationTest {
 
     @Test
     public void givenProperJson_whenDeserializeIsInvoked_thenProperObjectIsReturned() throws IOException {
-        InputMessage message = new InputMessage("Me", "User", LocalDateTime.now(), "Test Message");
+        EventOut message = new EventOut(new Date(), "name", "59990120101123320,WR01,1,8100,1,34,120,01011", "line", "cell", "asset", "subasset", "operation", "processType");
         byte[] messageSerialized = mapper.writeValueAsBytes(message);
-        DeserializationSchema<InputMessage> deserializationSchema = new InputMessageDeserializationSchema();
-        InputMessage messageDeserialized = deserializationSchema.deserialize(messageSerialized);
+        DeserializationSchema<EventOut> deserializationSchema = new EventOutDeserializationSchema();
+        EventOut messageDeserialized = deserializationSchema.deserialize(messageSerialized);
 
         assertEquals(message, messageDeserialized);
     }
@@ -50,33 +53,44 @@ public class BackupCreatorIntegrationTest {
     @Test
     public void givenMultipleInputMessagesFromDifferentDays_whenBackupCreatorIsUser_thenMessagesAreGroupedProperly() throws Exception {
         LocalDateTime currentTime = LocalDateTime.now();
-        InputMessage message = new InputMessage("Me", "User", currentTime, "First TestMessage");
-        InputMessage secondMessage = new InputMessage("Me", "User", currentTime.plusHours(1), "First TestMessage");
-        InputMessage thirdMessage = new InputMessage("Me", "User", currentTime.plusHours(2), "First TestMessage");
-        InputMessage fourthMessage = new InputMessage("Me", "User", currentTime.plusHours(3), "First TestMessage");
-        InputMessage fifthMessage = new InputMessage("Me", "User", currentTime.plusHours(25), "First TestMessage");
-        InputMessage sixthMessage = new InputMessage("Me", "User", currentTime.plusHours(26), "First TestMessage");
+        EventOut event1 = new EventOut(new Date(), "name2", "29990120101123320,WR02,1,8102,2,34,120,01011", "line2", "cell2", "asset", "subasset", "operation", "processType");
+        EventOut event2 = new EventOut(new Date(), "name3", "39990120101123320,WR03,1,8103,3,34,120,01011", "line3", "cell3", "asset", "subasset", "operation", "processType");
+        EventOut event3 = new EventOut(new Date(), "name1", "19990120101123320,WR01,1,8101,1,34,120,01011", "line1", "cell1", "asset", "subasset", "operation", "processType");
+        EventOut event4 = new EventOut(new Date(), "name4", "49990120101123320,WR04,1,8104,4,34,120,01011", "line4", "cell4", "asset", "subasset", "operation", "processType");
+        EventOut event5 = new EventOut(new Date(), "name5", "59990120101123320,WR05,1,8105,5,34,120,01011", "line5", "cell5", "asset", "subasset", "operation", "processType");
+        EventOut event6 = new EventOut(new Date(), "name6", "69990120101123320,WR06,1,8106,6,34,120,01011", "line6", "cell6", "asset", "subasset", "operation", "processType");
 
-        List<InputMessage> firstBackupMessages = Arrays.asList(message, secondMessage, thirdMessage, fourthMessage);
-        List<InputMessage> secondBackupMessages = Arrays.asList(fifthMessage, sixthMessage);
-        List<InputMessage> inputMessages = ListUtils.union(firstBackupMessages, secondBackupMessages);
+        List<EventOut> firstBackupMessages = Arrays.asList(event1, event2, event3, event4);
+        List<EventOut> secondBackupMessages = Arrays.asList(event5, event6);
+        List<EventOut> inputMessages = ListUtils.union(firstBackupMessages, secondBackupMessages);
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
         env.setParallelism(1);
-        DataStreamSource<InputMessage> testDataSet = env.fromCollection(inputMessages);
+        DataStreamSource<EventOut> testDataSet = env.fromCollection(inputMessages);
         CollectingSink sink = new CollectingSink();
-        testDataSet.assignTimestampsAndWatermarks(new InputMessageTimestampAssigner())
-          .timeWindowAll(Time.hours(24))
-          .aggregate(new BackupAggregator())
-          .addSink(sink);
+        testDataSet.map(new BackupMap()).addSink(sink);
 
         env.execute();
 
-        Awaitility.await().until(() ->  sink.backups.size() == 2);
-        assertEquals(2, sink.backups.size());
-        assertEquals(firstBackupMessages, sink.backups.get(0).getInputMessages());
-        assertEquals(secondBackupMessages, sink.backups.get(1).getInputMessages());
+        Awaitility.await().until(() ->  sink.backups.size() == 6);
+        assertEquals(6, sink.backups.size());
+        System.out.println(sink.backups);
+        BackupMap backupMap= new BackupMap();
+        //We check that everything is insided
+        Backup backupEvent1=backupMap.map(event1);
+        Backup backupEvent2=backupMap.map(event2);
+        Backup backupEvent3=backupMap.map(event3);
+        Backup backupEvent4=backupMap.map(event4);
+        Backup backupEvent5=backupMap.map(event5);
+        Backup backupEvent6=backupMap.map(event6);
+
+        assertTrue(sink.backups.contains(backupEvent1));
+        assertTrue(sink.backups.contains(backupEvent2));
+        assertTrue(sink.backups.contains(backupEvent3));
+        assertTrue(sink.backups.contains(backupEvent4));
+        assertTrue(sink.backups.contains(backupEvent5));
+        assertTrue(sink.backups.contains(backupEvent6));
 
     }
 
@@ -84,7 +98,7 @@ public class BackupCreatorIntegrationTest {
     public void givenProperBackupObject_whenSerializeIsInvoked_thenObjectIsProperlySerialized() throws IOException {
         InputMessage message = new InputMessage("Me", "User", LocalDateTime.now(), "Test Message");
         List<InputMessage> messages = Arrays.asList(message);
-        Backup backup = new Backup(messages, LocalDateTime.now());
+        Backup backup = new Backup("description",  "traceabilityCode",  "status",  "working",  "2021-01-01",  "2022-01-01",  "feature",  "asset",  "value",  "limit",  "deviation");
         byte[] backupSerialized = mapper.writeValueAsBytes(backup);
         SerializationSchema<Backup> serializationSchema = new BackupSerializationSchema();
         byte[] backupProcessed = serializationSchema.serialize(backup);
