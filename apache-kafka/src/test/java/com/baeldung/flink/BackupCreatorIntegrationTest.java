@@ -2,7 +2,7 @@ package com.baeldung.flink;
 
 import com.baeldung.flink.model.Backup;
 import com.baeldung.flink.model.EventOut;
-import com.baeldung.flink.model.InputMessage;
+import com.baeldung.flink.model.EventOut;
 import com.baeldung.flink.operator.BackupMap;
 import com.baeldung.flink.schema.BackupSerializationSchema;
 import com.baeldung.flink.schema.EventOutDeserializationSchema;
@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class BackupCreatorIntegrationTest {
@@ -51,7 +52,31 @@ public class BackupCreatorIntegrationTest {
     }
 
     @Test
-    public void givenMultipleInputMessagesFromDifferentDays_whenBackupCreatorIsUser_thenMessagesAreGroupedProperly() throws Exception {
+    public void givenMultipleEventOutsFromSource_Only_DQCAlarmOut_Signal_Name_Are_Passing() throws Exception {
+        LocalDateTime currentTime = LocalDateTime.now();
+        EventOut event1 = new EventOut(new Date(), "DQCAlarmOut", "29990120101123320,WR02,1,8102,2,34,120,01011", "line2", "cell2", "asset", "subasset", "operation", "processType");
+        EventOut event2 = new EventOut(new Date(), "name3", "39990120101123320,WR03,1,8103,3,34,120,01011", "line3", "cell3", "asset", "subasset", "operation", "processType");
+        EventOut event3 = new EventOut(new Date(), "DQCAlarmOut", "29990120101123320,WR02,1,8102,2,34,120,01011", "line2", "cell2", "asset", "subasset", "operation", "processType");
+
+        List<EventOut> eventOuts = Arrays.asList(event1,event2,event3);
+
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+        env.setParallelism(1);
+        DataStreamSource<EventOut> testDataSet = env.fromCollection(eventOuts);
+        CollectingSink sink = new CollectingSink();
+        System.out.println(testDataSet.filter(ev -> ev.getSignalName().equalsIgnoreCase("DQCAlarmOut")).print());
+        testDataSet.filter(ev -> ev.getSignalName().equalsIgnoreCase("DQCAlarmOut")).map(new BackupMap()).addSink(sink);
+
+        env.execute();
+        System.out.println(sink.backups);
+        //6 from previous test and 2 for this one
+        assertEquals(8, sink.backups.size());
+        //Filtering is being done properly
+        assertFalse(sink.backups.contains(event2));
+    }
+    @Test
+    public void givenMultipleEventOutsFromSources_All_Are_Mapped_Correcly() throws Exception {
         LocalDateTime currentTime = LocalDateTime.now();
         EventOut event1 = new EventOut(new Date(), "name2", "29990120101123320,WR02,1,8102,2,34,120,01011", "line2", "cell2", "asset", "subasset", "operation", "processType");
         EventOut event2 = new EventOut(new Date(), "name3", "39990120101123320,WR03,1,8103,3,34,120,01011", "line3", "cell3", "asset", "subasset", "operation", "processType");
@@ -62,12 +87,12 @@ public class BackupCreatorIntegrationTest {
 
         List<EventOut> firstBackupMessages = Arrays.asList(event1, event2, event3, event4);
         List<EventOut> secondBackupMessages = Arrays.asList(event5, event6);
-        List<EventOut> inputMessages = ListUtils.union(firstBackupMessages, secondBackupMessages);
+        List<EventOut> EventOuts = ListUtils.union(firstBackupMessages, secondBackupMessages);
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
         env.setParallelism(1);
-        DataStreamSource<EventOut> testDataSet = env.fromCollection(inputMessages);
+        DataStreamSource<EventOut> testDataSet = env.fromCollection(EventOuts);
         CollectingSink sink = new CollectingSink();
         testDataSet.map(new BackupMap()).addSink(sink);
 
@@ -93,19 +118,6 @@ public class BackupCreatorIntegrationTest {
         assertTrue(sink.backups.contains(backupEvent6));
 
     }
-
-    @Test
-    public void givenProperBackupObject_whenSerializeIsInvoked_thenObjectIsProperlySerialized() throws IOException {
-        InputMessage message = new InputMessage("Me", "User", LocalDateTime.now(), "Test Message");
-        List<InputMessage> messages = Arrays.asList(message);
-        Backup backup = new Backup("description",  "traceabilityCode",  "status",  "working",  "2021-01-01",  "2022-01-01",  "feature",  "asset",  "value",  "limit",  "deviation");
-        byte[] backupSerialized = mapper.writeValueAsBytes(backup);
-        SerializationSchema<Backup> serializationSchema = new BackupSerializationSchema();
-        byte[] backupProcessed = serializationSchema.serialize(backup);
-        
-        assertArrayEquals(backupSerialized, backupProcessed);
-    }
-
     private static class CollectingSink implements SinkFunction<Backup> {
         
         public static List<Backup> backups = new ArrayList<>();

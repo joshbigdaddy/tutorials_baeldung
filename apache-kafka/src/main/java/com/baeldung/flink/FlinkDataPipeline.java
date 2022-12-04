@@ -13,6 +13,8 @@ import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer011;
 
+import java.time.Duration;
+
 import static com.baeldung.flink.connector.Consumers.*;
 import static com.baeldung.flink.connector.Producers.*;
 
@@ -58,6 +60,21 @@ public class FlinkDataPipeline {
     EventOutsStream.filter(ev -> ev.getSignalName().equalsIgnoreCase("DQCAlarmOut"))
         .map(new BackupMap())
         .addSink(flinkKafkaProducer);
+
+  /*    MongoConnectorOptions options = MongoConnectorOptions.builder()
+            .withDatabase("my_db")
+            .withCollection("my_collection")
+            .withConnectString("mongodb://user:password@127.0.0.1:27017")
+            .withTransactionEnable(false)
+            .withFlushOnCheckpoint(false)
+            .withFlushSize(1_000L)
+            .withFlushInterval(Duration.ofSeconds(10))
+            .build();
+
+         EventOutsStream.filter(ev -> ev.getSignalName().equalsIgnoreCase("DQCAlarmOut"))
+        .map(new BackupMap())
+        .addSink(new MongoSink<>(new StringDocumentSerializer(), options));
+            */
 
     environment.execute();
   }
